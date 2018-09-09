@@ -34,11 +34,11 @@ duration_delay_depth_delay = 0.01 #s
 
 ########## Drone regulation ##########
 C_f_estim = C_f
-K_factor = 400.0
+K_factor = 200.0
 K_velocity = 1.0
 
 vector_field_velocity = 0.02
-vector_field_approach_threshold = 2.0
+vector_field_approach_threshold = 0.5
 
 delta_t_regulation = 1.0 # sec
 set_point_following = 10.0
@@ -77,7 +77,7 @@ depth_delayed = 0.0
 # waypoints = [[5.0, 60*60*1]]
 # waypoints = [[0.0, 100]]
 # waypoints = [[5.0, 60*60], [10.0, 60*60], [0.0, 60*60], [5.0, 60*60]]
-waypoints = [[5.0, 10*60], [15.0, 10*60], [0.0, 10*60]]
+waypoints = [[5.0, 10*60], [15.0, 20*60], [0.0, 3*60]]
 
 ########## Simulation ##########
 dt=0.01
@@ -140,12 +140,13 @@ def K_e_v(e):
 
 def vector_field(z, set_point):
 	e = set_point-z
-	if(abs(e)>vector_field_approach_threshold):
-		return np.sign(e)*vector_field_velocity
-	else:
-		# return 0.0
-		# return atan(e*vector_field_velocity/vector_field_approach_threshold)
-		return atan(tan(1)*e/vector_field_approach_threshold)*vector_field_velocity
+	return atan(e*2.0/vector_field_approach_threshold)*(2.0/np.pi)*vector_field_velocity
+	# if(abs(e)>vector_field_approach_threshold):
+	# 	return np.sign(e)*vector_field_velocity
+	# else:
+	# 	# return 0.0
+	# 	# return atan(e*vector_field_velocity/vector_field_approach_threshold)
+	# 	return atan(tan(1)*e/vector_field_approach_threshold)*vector_field_velocity
 
 def depth_estimator(t):
 	global pressure_memory, depth_estim, depth_memory, velocity_estim
@@ -176,7 +177,6 @@ def depth_estimator(t):
 		s_v.pop(-1)
 		velocity_estim = np.mean(np.array(s_v))
 
-
 def control(set_point, x, tick_target, tick_target_compensated, dt):
 	global a_log, v_log, e_log, i_acc
 
@@ -185,7 +185,7 @@ def control(set_point, x, tick_target, tick_target_compensated, dt):
 	# d_noise = x[0] + np.random.standard_normal()*0.5e-3 # noise around centimeter
 	# ddot_noise = x[1] + np.random.standard_normal()*1e-3
 
-	# V_piston = -(x[3]-equilibrium_tick+equilibrium_tick_error)*tick_to_volume
+	V_piston = -(x[3]-equilibrium_tick+equilibrium_tick_error)*tick_to_volume
 
 	# a = K_acc*(-g*((V_piston+d_noise*volume_compression)*rho_eau) - (0.5*C_f_estim*x[1]*abs(x[1])*rho_eau))
 	# e = K_e*(set_point-d_noise)
@@ -196,10 +196,27 @@ def control(set_point, x, tick_target, tick_target_compensated, dt):
 	# i=K_i*i_acc
 	# cmd = K_factor*delta_t_regulation*(-v+e-a+i)
 
+	# if(abs(set_point-d_noise)<0.2):
+	# 	K_factor=50.0
+	# else:
+	# 	K_factor=400.0
 	v = K_velocity*(vector_field(d_noise, set_point) - ddot_noise)
 
-	cmd = K_factor*delta_t_regulation*(v)
+	# e = set_point-d_noise
+	# gamma = 2.0/vector_field_approach_threshold
+	# beta = (2.0/np.pi)*vector_field_velocity
 
+	# A=g*rho_eau/m
+	# B=0.5*rho_eau*C_f/m
+
+	# x1=ddot_noise
+	# x2=d_noise
+	# x3=-(x[3]-equilibrium_tick)*tick_to_volume
+
+	# u=0.02*(set_point-x2)-x1
+
+	# cmd = K_factor*delta_t_regulation*(v)
+	cmd = delta_t_regulation*K_factor*(v)	
 
 	# e_log.append(e)
 	v_log.append(v)	
